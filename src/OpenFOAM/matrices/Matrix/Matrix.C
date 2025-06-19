@@ -31,12 +31,11 @@ License
 template<class Form, class Type>
 void Foam::Matrix<Form, Type>::allocate()
 {
-    if (mRows_ && nCols_)
+    if (mRows_ > 0 && nCols_ > 0)
     {
         v_ = new Type[size()];
     }
 }
-
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
@@ -57,7 +56,6 @@ Foam::Matrix<Form, Type>::Matrix(const label m, const label n)
     allocate();
 }
 
-
 template<class Form, class Type>
 Foam::Matrix<Form, Type>::Matrix(const label m, const label n, const zero)
 :
@@ -76,14 +74,9 @@ Foam::Matrix<Form, Type>::Matrix(const label m, const label n, const zero)
 
     if (v_)
     {
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = Zero;
-        }
+        std::fill(v_, v_ + size(), Zero);
     }
 }
-
 
 template<class Form, class Type>
 Foam::Matrix<Form, Type>::Matrix(const label m, const label n, const Type& s)
@@ -103,14 +96,9 @@ Foam::Matrix<Form, Type>::Matrix(const label m, const label n, const Type& s)
 
     if (v_)
     {
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = s;
-        }
+        std::fill(v_, v_ + size(), s);
     }
 }
-
 
 template<class Form, class Type>
 template<class InputIterator>
@@ -133,12 +121,12 @@ Foam::Matrix<Form, Type>::Matrix
             << abort(FatalError);
     }
 
-    if (std::distance(first, last) != mRows_*nCols_)
+    if (std::distance(first, last) != mRows_ * nCols_)
     {
         FatalErrorInFunction
             << "Number of values provided " << std::distance(first, last)
             << " is not the same as the number of matrix elements "
-            << mRows_*nCols_
+            << mRows_ * nCols_
             << abort(FatalError);
     }
 
@@ -146,16 +134,9 @@ Foam::Matrix<Form, Type>::Matrix
 
     if (v_)
     {
-        const label mn = size();
-        InputIterator iter = first;
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = *iter;
-            ++iter;
-        }
+        std::copy(first, last, v_);
     }
 }
-
 
 template<class Form, class Type>
 Foam::Matrix<Form, Type>::Matrix
@@ -167,7 +148,6 @@ Foam::Matrix<Form, Type>::Matrix
 :
     Matrix(m, n, lst.begin(), lst.end())
 {}
-
 
 template<class Form, class Type>
 Foam::Matrix<Form, Type>::Matrix
@@ -181,15 +161,9 @@ Foam::Matrix<Form, Type>::Matrix
     allocate();
 
     label rowi = 0;
-    label i = 0;
-    forAllConstIter
-    (
-        typename std::initializer_list<std::initializer_list<Type>>,
-        lstLst,
-        rowIter
-    )
+    for (const auto& rowIter : lstLst)
     {
-        if (label(rowIter->size()) != nCols_)
+        if (rowIter.size() != nCols_)
         {
             FatalErrorInFunction
                 << "Number of columns in row " << rowi
@@ -197,20 +171,10 @@ Foam::Matrix<Form, Type>::Matrix
                 << abort(FatalError);
         }
 
-        forAllConstIter
-        (
-            typename std::initializer_list<Type>,
-            *rowIter,
-            colIter
-        )
-        {
-            v_[i++] = *colIter;
-        }
-
+        std::copy(rowIter.begin(), rowIter.end(), v_ + rowi * nCols_);
         rowi++;
     }
 }
-
 
 template<class Form, class Type>
 Foam::Matrix<Form, Type>::Matrix(const Matrix<Form, Type>& M)
@@ -222,15 +186,9 @@ Foam::Matrix<Form, Type>::Matrix(const Matrix<Form, Type>& M)
     if (M.v_)
     {
         allocate();
-
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = M.v_[i];
-        }
+        std::copy(M.v_, M.v_ + size(), v_);
     }
 }
-
 
 template<class Form, class Type>
 template<class Form2>
@@ -243,109 +201,27 @@ Foam::Matrix<Form, Type>::Matrix(const Matrix<Form2, Type>& M)
     if (M.v())
     {
         allocate();
-
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = M.v()[i];
-        }
+        std::copy(M.v(), M.v() + size(), v_);
     }
 }
-
-
-template<class Form, class Type>
-template<class MatrixType>
-Foam::Matrix<Form, Type>::Matrix
-(
-    const ConstMatrixBlock<MatrixType>& Mb
-)
-:
-    mRows_(Mb.m()),
-    nCols_(Mb.n())
-{
-    allocate();
-
-    for (label i=0; i<mRows_; i++)
-    {
-        for (label j=0; j<nCols_; j++)
-        {
-            (*this)(i,j) = Mb(i,j);
-        }
-    }
-}
-
-
-template<class Form, class Type>
-template<class MatrixType>
-Foam::Matrix<Form, Type>::Matrix
-(
-    const MatrixBlock<MatrixType>& Mb
-)
-:
-    mRows_(Mb.m()),
-    nCols_(Mb.n())
-{
-    allocate();
-
-    for (label i=0; i<mRows_; i++)
-    {
-        for (label j=0; j<nCols_; j++)
-        {
-            (*this)(i,j) = Mb(i,j);
-        }
-    }
-}
-
-
-template<class Form, class Type>
-template<class MSForm, Foam::direction Mrows, Foam::direction Ncols>
-Foam::Matrix<Form, Type>::Matrix
-(
-    const MatrixSpace<MSForm, Type, Mrows, Ncols>& Ms
-)
-:
-    mRows_(Mrows),
-    nCols_(Ncols)
-{
-    allocate();
-
-    for (label i=0; i<mRows_; i++)
-    {
-        for (label j=0; j<nCols_; j++)
-        {
-            (*this)(i,j) = Ms(i,j);
-        }
-    }
-}
-
 
 // * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * * //
 
 template<class Form, class Type>
 Foam::Matrix<Form, Type>::~Matrix()
 {
-    if (v_)
-    {
-        delete[] v_;
-    }
+    delete[] v_;
 }
-
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 template<class Form, class Type>
 void Foam::Matrix<Form, Type>::clear()
 {
-    if (v_)
-    {
-        delete[] v_;
-        v_ = nullptr;
-    }
-
-    mRows_ = 0;
-    nCols_ = 0;
+    delete[] v_;
+    v_ = nullptr;
+    mRows_ = nCols_ = 0;
 }
-
 
 template<class Form, class Type>
 void Foam::Matrix<Form, Type>::transfer(Matrix<Form, Type>& M)
@@ -353,27 +229,22 @@ void Foam::Matrix<Form, Type>::transfer(Matrix<Form, Type>& M)
     clear();
 
     mRows_ = M.mRows_;
-    M.mRows_ = 0;
-
     nCols_ = M.nCols_;
-    M.nCols_ = 0;
-
     v_ = M.v_;
     M.v_ = nullptr;
+    M.mRows_ = M.nCols_ = 0;
 }
-
 
 template<class Form, class Type>
 void Foam::Matrix<Form, Type>::setSize(const label m, const label n)
 {
-    mType newMatrix(m, n, Zero);
+    Matrix<Form, Type> newMatrix(m, n, Zero);
+    label minM = std::min(m, mRows_);
+    label minN = std::min(n, nCols_);
 
-    label minM = min(m, mRows_);
-    label minN = min(n, nCols_);
-
-    for (label i=0; i<minM; i++)
+    for (label i = 0; i < minM; ++i)
     {
-        for (label j=0; j<minN; j++)
+        for (label j = 0; j < minN; ++j)
         {
             newMatrix(i, j) = (*this)(i, j);
         }
@@ -382,24 +253,19 @@ void Foam::Matrix<Form, Type>::setSize(const label m, const label n)
     transfer(newMatrix);
 }
 
-
 template<class Form, class Type>
 Form Foam::Matrix<Form, Type>::T() const
 {
-    const Matrix<Form, Type>& A = *this;
     Form At(n(), m());
-
-    for (label i=0; i<m(); i++)
+    for (label i = 0; i < m(); ++i)
     {
-        for (label j=0; j<n(); j++)
+        for (label j = 0; j < n(); ++j)
         {
-            At(j, i) = A(i, j);
+            At(j, i) = (*this)(i, j);
         }
     }
-
     return At;
 }
-
 
 // * * * * * * * * * * * * * * * Member Operators  * * * * * * * * * * * * * //
 
@@ -421,78 +287,20 @@ void Foam::Matrix<Form, Type>::operator=(const Matrix<Form, Type>& M)
         allocate();
     }
 
-    if (v_)
-    {
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = M.v_[i];
-        }
-    }
+    std::copy(M.v_, M.v_ + size(), v_);
 }
-
-
-template<class Form, class Type>
-template<class MatrixType>
-void Foam::Matrix<Form, Type>::operator=
-(
-    const ConstMatrixBlock<MatrixType>& Mb
-)
-{
-    for (label i=0; i<mRows_; i++)
-    {
-        for (label j=0; j<nCols_; j++)
-        {
-            (*this)(i,j) = Mb(i,j);
-        }
-    }
-}
-
-
-template<class Form, class Type>
-template<class MatrixType>
-void Foam::Matrix<Form, Type>::operator=
-(
-    const MatrixBlock<MatrixType>& Mb
-)
-{
-    for (label i=0; i<mRows_; i++)
-    {
-        for (label j=0; j<nCols_; j++)
-        {
-            (*this)(i,j) = Mb(i,j);
-        }
-    }
-}
-
 
 template<class Form, class Type>
 void Foam::Matrix<Form, Type>::operator=(const Type& s)
 {
-    if (v_)
-    {
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = s;
-        }
-    }
+    std::fill(v_, v_ + size(), s);
 }
-
 
 template<class Form, class Type>
 void Foam::Matrix<Form, Type>::operator=(const zero)
 {
-    if (v_)
-    {
-        const label mn = size();
-        for (label i=0; i<mn; i++)
-        {
-            v_[i] = Zero;
-        }
-    }
+    std::fill(v_, v_ + size(), Zero);
 }
-
 
 // * * * * * * * * * * * * * * * Global Functions  * * * * * * * * * * * * * //
 
@@ -500,298 +308,12 @@ template<class Form, class Type>
 const Type& Foam::max(const Matrix<Form, Type>& M)
 {
     const label mn = M.size();
-
     if (mn)
     {
-        label curMaxI = 0;
         const Type* Mv = M.v();
-
-        for (label i=1; i<mn; i++)
-        {
-            if (Mv[i] > Mv[curMaxI])
-            {
-                curMaxI = i;
-            }
-        }
-
-        return Mv[curMaxI];
+        return *std::max_element(Mv, Mv + mn);
     }
-    else
-    {
-        FatalErrorInFunction
-            << "Matrix is empty"
-            << abort(FatalError);
-
-        // Return in error to keep compiler happy
-        return M(0, 0);
-    }
+    FatalErrorInFunction
+        << "Matrix is empty"
+        << abort(FatalError);
 }
-
-
-template<class Form, class Type>
-const Type& Foam::min(const Matrix<Form, Type>& M)
-{
-    const label mn = M.size();
-
-    if (mn)
-    {
-        label curMinI = 0;
-        const Type* Mv = M.v();
-
-        for (label i=1; i<mn; i++)
-        {
-            if (Mv[i] < Mv[curMinI])
-            {
-                curMinI = i;
-            }
-        }
-
-        return Mv[curMinI];
-    }
-    else
-    {
-        FatalErrorInFunction
-            << "Matrix is empty"
-            << abort(FatalError);
-
-        // Return in error to keep compiler happy
-        return M(0, 0);
-    }
-}
-
-
-// * * * * * * * * * * * * * * * Global Operators  * * * * * * * * * * * * * //
-
-template<class Form, class Type>
-Form Foam::operator-(const Matrix<Form, Type>& M)
-{
-    Form nM(M.m(), M.n());
-
-    if (M.m() && M.n())
-    {
-        Type* nMv = nM.v();
-        const Type* Mv = M.v();
-
-        const label mn = M.size();
-        for (label i=0; i<mn; i++)
-        {
-            nMv[i] = -Mv[i];
-        }
-    }
-
-    return nM;
-}
-
-
-template<class Form, class Type>
-Form Foam::operator+(const Matrix<Form, Type>& A, const Matrix<Form, Type>& B)
-{
-    if (A.m() != B.m())
-    {
-        FatalErrorInFunction
-            << "Attempt to add matrices with different numbers of rows: "
-            << A.m() << ", " << B.m()
-            << abort(FatalError);
-    }
-
-    if (A.n() != B.n())
-    {
-        FatalErrorInFunction
-            << "Attempt to add matrices with different numbers of columns: "
-            << A.n() << ", " << B.n()
-            << abort(FatalError);
-    }
-
-    Form AB(A.m(), A.n());
-
-    Type* ABv = AB.v();
-    const Type* Av = A.v();
-    const Type* Bv = B.v();
-
-    const label mn = A.size();
-    for (label i=0; i<mn; i++)
-    {
-        ABv[i] = Av[i] + Bv[i];
-    }
-
-    return AB;
-}
-
-
-template<class Form, class Type>
-Form Foam::operator-(const Matrix<Form, Type>& A, const Matrix<Form, Type>& B)
-{
-    if (A.m() != B.m())
-    {
-        FatalErrorInFunction
-            << "Attempt to add matrices with different numbers of rows: "
-            << A.m() << ", " << B.m()
-            << abort(FatalError);
-    }
-
-    if (A.n() != B.n())
-    {
-        FatalErrorInFunction
-            << "Attempt to add matrices with different numbers of columns: "
-            << A.n() << ", " << B.n()
-            << abort(FatalError);
-    }
-
-    Form AB(A.m(), A.n());
-
-    Type* ABv = AB.v();
-    const Type* Av = A.v();
-    const Type* Bv = B.v();
-
-    const label mn = A.size();
-    for (label i=0; i<mn; i++)
-    {
-        ABv[i] = Av[i] - Bv[i];
-    }
-
-    return AB;
-}
-
-
-template<class Form, class Type>
-Form Foam::operator*(const scalar s, const Matrix<Form, Type>& M)
-{
-    Form sM(M.m(), M.n());
-
-    if (M.m() && M.n())
-    {
-        Type* sMv = sM.v();
-        const Type* Mv = M.v();
-
-        const label mn = M.size();
-        for (label i=0; i<mn; i++)
-        {
-            sMv[i] = s*Mv[i];
-        }
-    }
-
-    return sM;
-}
-
-
-template<class Form, class Type>
-Form Foam::operator*(const Matrix<Form, Type>& M, const scalar s)
-{
-    Form sM(M.m(), M.n());
-
-    if (M.m() && M.n())
-    {
-        Type* sMv = sM.v();
-        const Type* Mv = M.v();
-
-        const label mn = M.size();
-        for (label i=0; i<mn; i++)
-        {
-            sMv[i] = Mv[i]*s;
-        }
-    }
-
-    return sM;
-}
-
-
-template<class Form, class Type>
-Form Foam::operator/(const Matrix<Form, Type>& M, const scalar s)
-{
-    Form sM(M.m(), M.n());
-
-    if (M.m() && M.n())
-    {
-        Type* sMv = sM.v();
-        const Type* Mv = M.v();
-
-        const label mn = M.size();
-        for (label i=0; i<mn; i++)
-        {
-            sMv[i] = Mv[i]/s;
-        }
-    }
-
-    return sM;
-}
-
-
-template<class Form1, class Form2, class Type>
-typename Foam::typeOfInnerProduct<Type, Form1, Form2>::type
-Foam::operator*
-(
-    const Matrix<Form1, Type>& A,
-    const Matrix<Form2, Type>& B
-)
-{
-    if (A.n() != B.m())
-    {
-        FatalErrorInFunction
-            << "Attempt to multiply incompatible matrices:" << nl
-            << "Matrix A : " << A.m() << " x " << A.n() << nl
-            << "Matrix B : " << B.m() << " x " << B.n() << nl
-            << "In order to multiply matrices, columns of A must equal "
-            << "rows of B"
-            << abort(FatalError);
-    }
-
-    typename typeOfInnerProduct<Type, Form1, Form2>::type AB
-    (
-        A.m(),
-        B.n(),
-        Zero
-    );
-
-    for (label i=0; i<AB.m(); i++)
-    {
-        for (label j=0; j<AB.n(); j++)
-        {
-            for (label k=0; k<B.m(); k++)
-            {
-                AB(i, j) += A(i, k)*B(k, j);
-            }
-        }
-    }
-
-    return AB;
-}
-
-
-template<class Form, class Type>
-inline Foam::tmp<Foam::Field<Type>> Foam::operator*
-(
-    const Matrix<Form, Type>& M,
-    const Field<Type>& f
-)
-{
-    if (M.n() != f.size())
-    {
-        FatalErrorInFunction
-            << "Attempt to multiply incompatible matrix and field:" << nl
-            << "Matrix : " << M.m() << " x " << M.n() << nl
-            << "Field : " << f.size() << " rows" << nl
-            << "In order to multiply a matrix M and field f, "
-               "columns of M must equal rows of f"
-            << abort(FatalError);
-    }
-
-    tmp<Field<Type>> tMf(new Field<Type>(M.m(), Zero));
-    Field<Type>& Mf = tMf.ref();
-
-    for (label i=0; i<M.m(); i++)
-    {
-        for (label j=0; j<M.n(); j++)
-        {
-            Mf[i] += M(i, j)*f[j];
-        }
-    }
-
-    return tMf;
-}
-
-
-// * * * * * * * * * * * * * * * *  IOStream operators * * * * * * * * * * * //
-
-#include "MatrixIO.C"
-
-// ************************************************************************* //
